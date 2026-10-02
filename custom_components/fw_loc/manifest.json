@@ -1,0 +1,14 @@
+{
+  "domain": "fw_loc",
+  "name": "FW Locations",
+  "codeowners": [
+    "@adrien3287"
+  ],
+  "config_flow": true,
+  "documentation": "https://github.com/adrien3287/fw_loc",
+  "issue_tracker": "https://github.com/adrien3287/fw_loc/issues",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "requirements": [],
+  "version": "0.1.0"
+}
