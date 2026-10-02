@@ -3,14 +3,13 @@
   "config": {
     "step": {
       "user": {
-        "title": "Notfall- und Gesundheitsstandorte in der Nähe",
+        "title": "Notfallstandorte in der Nähe",
         "description": "Die Standorte werden aus OpenStreetMap rund um die Home-Koordinaten von Home Assistant geladen. Der Radius ist auf 50 km begrenzt.",
         "data": {
           "radius_km": "Radius (km, max. 50)",
-          "fire_stations": "Feuerwachen",
+          "fire_stations": "Aktive Feuerwachen",
           "hospitals": "Krankenhäuser",
-          "ambulance_stations": "Rettungswachen",
-          "general_practitioners": "Hausärzte / Allgemeinmediziner"
+          "ambulance_stations": "Rettungswachen / Notfallrettung"
         }
       }
     },
@@ -28,10 +27,9 @@
         "description": "Suchradius oder aktivierte Kategorien ändern.",
         "data": {
           "radius_km": "Radius (km, max. 50)",
-          "fire_stations": "Feuerwachen",
+          "fire_stations": "Aktive Feuerwachen",
           "hospitals": "Krankenhäuser",
-          "ambulance_stations": "Rettungswachen",
-          "general_practitioners": "Hausärzte / Allgemeinmediziner"
+          "ambulance_stations": "Rettungswachen / Notfallrettung"
         }
       }
     },
