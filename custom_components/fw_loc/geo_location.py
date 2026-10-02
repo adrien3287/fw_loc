@@ -22,8 +22,8 @@ from .const import (
 from .coordinator import FwLocCoordinator, Place
 
 ICONS = {
-    CATEGORY_FIRE_STATION: "mdi:fire",
-    CATEGORY_HOSPITAL: "mdi:hospital-marker",
+    CATEGORY_FIRE_STATION: "mdi:fire-station",
+    CATEGORY_HOSPITAL: "mdi:hospital-building",
     CATEGORY_AMBULANCE_STATION: "mdi:ambulance",
 }
 
