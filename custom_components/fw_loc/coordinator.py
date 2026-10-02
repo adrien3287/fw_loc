@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 import logging
@@ -143,28 +144,46 @@ class FwLocCoordinator(DataUpdateCoordinator[list[Place]]):
         session = async_get_clientsession(self.hass)
 
         last_error: Exception | None = None
-        for endpoint in OVERPASS_ENDPOINTS:
-            try:
-                places = await self._async_fetch_endpoint(
+        tasks = [
+            asyncio.create_task(
+                self._async_fetch_endpoint_result(
                     session,
                     endpoint,
                     query,
                     latitude,
                     longitude,
                 )
+            )
+            for endpoint in OVERPASS_ENDPOINTS
+        ]
+
+        try:
+            for completed in asyncio.as_completed(tasks, timeout=32):
+                endpoint, places, error = await completed
+                if error is not None:
+                    last_error = error
+                    _LOGGER.warning("Overpass endpoint %s failed: %s", endpoint, error)
+                    continue
+
                 timestamp = datetime.now(timezone.utc).isoformat()
                 self.using_cache = False
                 self.data_updated_at = timestamp
                 await self.store.async_save(
                     {
                         "updated_at": timestamp,
+                        "endpoint": endpoint,
                         "places": [asdict(place) for place in places],
                     }
                 )
                 return places
-            except (aiohttp.ClientError, TimeoutError, ValueError) as err:
-                last_error = err
-                _LOGGER.warning("Overpass endpoint %s failed: %s", endpoint, err)
+        except TimeoutError as err:
+            last_error = err
+            _LOGGER.warning("Timed out waiting for a usable Overpass endpoint")
+        finally:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
 
         cached = await self.store.async_load()
         if cached and cached.get("places"):
@@ -187,6 +206,27 @@ class FwLocCoordinator(DataUpdateCoordinator[list[Place]]):
             f"Unable to retrieve OpenStreetMap data: {last_error}"
         ) from last_error
 
+    async def _async_fetch_endpoint_result(
+        self,
+        session: aiohttp.ClientSession,
+        endpoint: str,
+        query: str,
+        home_latitude: float,
+        home_longitude: float,
+    ) -> tuple[str, list[Place], Exception | None]:
+        """Fetch one endpoint and return its error instead of failing the race."""
+        try:
+            places = await self._async_fetch_endpoint(
+                session,
+                endpoint,
+                query,
+                home_latitude,
+                home_longitude,
+            )
+            return endpoint, places, None
+        except (aiohttp.ClientError, TimeoutError, ValueError) as err:
+            return endpoint, [], err
+
     async def _async_fetch_endpoint(
         self,
         session: aiohttp.ClientSession,
@@ -196,7 +236,7 @@ class FwLocCoordinator(DataUpdateCoordinator[list[Place]]):
         home_longitude: float,
     ) -> list[Place]:
         """Fetch and parse one Overpass endpoint."""
-        timeout = aiohttp.ClientTimeout(total=75)
+        timeout = aiohttp.ClientTimeout(total=30)
         headers = {
             "User-Agent": USER_AGENT,
             "Accept": "application/json",
@@ -313,31 +353,28 @@ class FwLocCoordinator(DataUpdateCoordinator[list[Place]]):
         """Build a compact Overpass query for the enabled categories."""
         around = f"(around:{radius_m},{latitude:.6f},{longitude:.6f})"
         statements: list[str] = []
+        amenity_values: list[str] = []
 
         if self._enabled(CONF_FIRE_STATIONS, DEFAULT_FIRE_STATIONS):
-            statements.append(f'nwr{around}["amenity"="fire_station"];')
+            amenity_values.append("fire_station")
 
         if self._enabled(CONF_HOSPITALS, DEFAULT_HOSPITALS):
-            statements.extend(
-                (
-                    f'nwr{around}["amenity"="hospital"];',
-                    f'nwr{around}["healthcare"="hospital"];',
-                )
-            )
+            amenity_values.append("hospital")
+            statements.append(f'nwr{around}["healthcare"="hospital"];')
 
         if self._enabled(
             CONF_AMBULANCE_STATIONS,
             DEFAULT_AMBULANCE_STATIONS,
         ):
-            statements.extend(
-                (
-                    f'nwr{around}["emergency"="ambulance_station"];',
-                    f'nwr{around}["amenity"="ambulance_station"];',
-                )
-            )
+            amenity_values.append("ambulance_station")
+            statements.append(f'nwr{around}["emergency"="ambulance_station"];')
+
+        if amenity_values:
+            amenity_regex = "^(" + "|".join(amenity_values) + ")$"
+            statements.insert(0, f'nwr{around}["amenity"~"{amenity_regex}"];')
 
         body = "\n".join(statements)
-        return f"""[out:json][timeout:60];
+        return f"""[out:json][timeout:25];
 (
 {body}
 );
