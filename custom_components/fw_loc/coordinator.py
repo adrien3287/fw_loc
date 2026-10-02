@@ -42,7 +42,7 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-_CACHE_VERSION = 1
+_CACHE_VERSION = 2
 _GENERAL_SPECIALTIES = {
     "family_medicine",
     "family_practice",
@@ -162,7 +162,12 @@ class FwLocCoordinator(DataUpdateCoordinator[list[Place]]):
             _LOGGER.warning(
                 "Using cached FW Locations data because all Overpass endpoints failed"
             )
-            return [Place.from_dict(item) for item in cached["places"]]
+            return [
+                place
+                for item in cached["places"]
+                if _is_active_feature((place := Place.from_dict(item)).tags)
+                and bool(self._categories_for(place.tags))
+            ]
 
         raise UpdateFailed(
             f"Unable to retrieve OpenStreetMap data: {last_error}"
@@ -255,9 +260,12 @@ class FwLocCoordinator(DataUpdateCoordinator[list[Place]]):
         """Return all categories represented by an OSM feature."""
         categories: set[str] = set()
 
-        if self._enabled(CONF_FIRE_STATIONS, DEFAULT_FIRE_STATIONS) and (
-            tags.get("amenity") == "fire_station"
-            or tags.get("building") == "fire_station"
+        if not _is_active_feature(tags):
+            return categories
+
+        if (
+            self._enabled(CONF_FIRE_STATIONS, DEFAULT_FIRE_STATIONS)
+            and tags.get("amenity") == "fire_station"
         ):
             categories.add(CATEGORY_FIRE_STATION)
 
@@ -298,12 +306,7 @@ class FwLocCoordinator(DataUpdateCoordinator[list[Place]]):
         statements: list[str] = []
 
         if self._enabled(CONF_FIRE_STATIONS, DEFAULT_FIRE_STATIONS):
-            statements.extend(
-                (
-                    f'nwr{around}["amenity"="fire_station"];',
-                    f'nwr{around}["building"="fire_station"];',
-                )
-            )
+            statements.append(f'nwr{around}["amenity"="fire_station"];')
 
         if self._enabled(CONF_HOSPITALS, DEFAULT_HOSPITALS):
             statements.extend(
@@ -359,6 +362,54 @@ def _extract_coordinates(element: dict[str, Any]) -> tuple[float, float] | None:
         return float(lat), float(lon)
     except (TypeError, ValueError):
         return None
+
+
+def _is_active_feature(tags: dict[str, str]) -> bool:
+    """Return False for lifecycle-tagged or explicitly inactive OSM features."""
+    inactive_values = {
+        "abandoned",
+        "closed",
+        "demolished",
+        "destroyed",
+        "disused",
+        "former",
+        "historic",
+        "no",
+        "razed",
+        "removed",
+    }
+
+    # Common simple lifecycle/status markers.
+    for key in (
+        "abandoned",
+        "demolished",
+        "destroyed",
+        "disused",
+        "razed",
+        "removed",
+    ):
+        if tags.get(key, "").strip().lower() in {"yes", "true", "1"}:
+            return False
+
+    if tags.get("operational_status", "").strip().lower() in inactive_values:
+        return False
+    if tags.get("status", "").strip().lower() in inactive_values:
+        return False
+
+    # OSM lifecycle prefixes mean the object is no longer an active amenity.
+    lifecycle_prefixes = (
+        "abandoned:",
+        "demolished:",
+        "destroyed:",
+        "disused:",
+        "former:",
+        "razed:",
+        "removed:",
+    )
+    if any(key.startswith(lifecycle_prefixes) for key in tags):
+        return False
+
+    return True
 
 
 def _is_general_practitioner(tags: dict[str, str]) -> bool:
