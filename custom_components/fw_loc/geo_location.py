@@ -8,6 +8,7 @@ from homeassistant.components.geo_location import GeolocationEvent
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfLength
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -47,6 +48,7 @@ async def async_setup_entry(
     """Set up FW Locations geolocation entities."""
     coordinator: FwLocCoordinator = entry.runtime_data
     entities: dict[str, FwLocGeolocationEntity] = {}
+    entity_registry = er.async_get(hass)
 
     @callback
     def _sync_entities() -> None:
@@ -55,6 +57,20 @@ async def async_setup_entry(
         places_by_id = {place.unique_id: place for place in places}
         current_ids = set(places_by_id)
         known_ids = set(entities)
+        valid_unique_ids = {
+            f"{DOMAIN}_{place_id.replace(':', '_')}" for place_id in current_ids
+        }
+
+        # Clean up registry entries from removed categories or filtered-out POIs.
+        registry_ids_to_remove = [
+            registry_entry.entity_id
+            for registry_entry in entity_registry.entities.values()
+            if registry_entry.config_entry_id == entry.entry_id
+            and registry_entry.unique_id.startswith(f"{DOMAIN}_")
+            and registry_entry.unique_id not in valid_unique_ids
+        ]
+        for entity_id in registry_ids_to_remove:
+            entity_registry.async_remove(entity_id)
 
         for stale_id in known_ids - current_ids:
             stale_entity = entities.pop(stale_id)
