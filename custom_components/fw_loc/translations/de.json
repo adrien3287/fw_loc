@@ -1,0 +1,42 @@
+{
+  "title": "FW Locations",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Notfall- und Gesundheitsstandorte in der Nähe",
+        "description": "Die Standorte werden aus OpenStreetMap rund um die Home-Koordinaten von Home Assistant geladen. Der Radius ist auf 50 km begrenzt.",
+        "data": {
+          "radius_km": "Radius (km, max. 50)",
+          "fire_stations": "Feuerwachen",
+          "hospitals": "Krankenhäuser",
+          "ambulance_stations": "Rettungswachen",
+          "general_practitioners": "Hausärzte / Allgemeinmediziner"
+        }
+      }
+    },
+    "error": {
+      "select_one_category": "Mindestens eine Standortkategorie aktivieren."
+    },
+    "abort": {
+      "single_instance_allowed": "FW Locations ist bereits konfiguriert."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "FW Locations Optionen",
+        "description": "Suchradius oder aktivierte Kategorien ändern.",
+        "data": {
+          "radius_km": "Radius (km, max. 50)",
+          "fire_stations": "Feuerwachen",
+          "hospitals": "Krankenhäuser",
+          "ambulance_stations": "Rettungswachen",
+          "general_practitioners": "Hausärzte / Allgemeinmediziner"
+        }
+      }
+    },
+    "error": {
+      "select_one_category": "Mindestens eine Standortkategorie aktivieren."
+    }
+  }
+}
