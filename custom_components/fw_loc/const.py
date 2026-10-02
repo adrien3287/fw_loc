@@ -23,7 +23,7 @@ CATEGORY_HOSPITAL = "hospital"
 CATEGORY_AMBULANCE_STATION = "ambulance_station"
 
 PROJECT_URL = "https://github.com/adrien3287/fw_loc"
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 USER_AGENT = f"fw_loc/{VERSION} (+{PROJECT_URL})"
 
 OVERPASS_ENDPOINTS = (
