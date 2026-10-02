@@ -46,12 +46,13 @@ The integration queries OpenStreetMap through several public Overpass API endpoi
 
 ## Home Assistant map
 
-All entities use the source `fw_loc`, so a map card can display them together:
+All entities use the source `fw_loc`. Use `label_mode: icon` so Home Assistant renders the entity MDI icon instead of initials from the friendly name:
 
 ```yaml
 type: map
 geo_location_sources:
-  - fw_loc
+  - source: fw_loc
+    label_mode: icon
 ```
 
 Each entity exposes latitude, longitude, distance from Home, category, OSM object information and common metadata such as operator, address, phone, website and opening hours when available.
