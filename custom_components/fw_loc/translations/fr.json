@@ -1,0 +1,42 @@
+{
+  "title": "FW Locations",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Services d'urgence et de santé à proximité",
+        "description": "Les localisations sont chargées depuis OpenStreetMap autour des coordonnées Home de Home Assistant. Le rayon est limité à 50 km.",
+        "data": {
+          "radius_km": "Rayon (km, max. 50)",
+          "fire_stations": "Casernes de pompiers",
+          "hospitals": "Hôpitaux",
+          "ambulance_stations": "Rettungswachen / centres ambulanciers",
+          "general_practitioners": "Médecins généralistes"
+        }
+      }
+    },
+    "error": {
+      "select_one_category": "Active au moins une catégorie."
+    },
+    "abort": {
+      "single_instance_allowed": "FW Locations est déjà configuré."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options FW Locations",
+        "description": "Modifie le rayon de recherche ou les catégories activées.",
+        "data": {
+          "radius_km": "Rayon (km, max. 50)",
+          "fire_stations": "Casernes de pompiers",
+          "hospitals": "Hôpitaux",
+          "ambulance_stations": "Rettungswachen / centres ambulanciers",
+          "general_practitioners": "Médecins généralistes"
+        }
+      }
+    },
+    "error": {
+      "select_one_category": "Active au moins une catégorie."
+    }
+  }
+}
