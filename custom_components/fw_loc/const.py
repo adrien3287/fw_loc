@@ -25,7 +25,11 @@ CATEGORY_HOSPITAL = "hospital"
 CATEGORY_AMBULANCE_STATION = "ambulance_station"
 CATEGORY_GENERAL_PRACTITIONER = "general_practitioner"
 
+PROJECT_URL = "https://github.com/adrien3287/fw_loc"
+USER_AGENT = f"fw_loc/0.1.1 (+{PROJECT_URL})"
+
 OVERPASS_ENDPOINTS = (
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter",
 )
