@@ -14,7 +14,6 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import (
     CATEGORY_AMBULANCE_STATION,
     CATEGORY_FIRE_STATION,
-    CATEGORY_GENERAL_PRACTITIONER,
     CATEGORY_HOSPITAL,
     DOMAIN,
     SOURCE,
@@ -25,21 +24,18 @@ ICONS = {
     CATEGORY_FIRE_STATION: "mdi:fire",
     CATEGORY_HOSPITAL: "mdi:hospital-marker",
     CATEGORY_AMBULANCE_STATION: "mdi:ambulance",
-    CATEGORY_GENERAL_PRACTITIONER: "mdi:plus-circle",
 }
 
 MARKER_COLORS = {
     CATEGORY_FIRE_STATION: "#e53935",
     CATEGORY_HOSPITAL: "#1565c0",
     CATEGORY_AMBULANCE_STATION: "#d32f2f",
-    CATEGORY_GENERAL_PRACTITIONER: "#c62828",
 }
 
 CATEGORY_LABELS = {
     CATEGORY_FIRE_STATION: "Fire station",
     CATEGORY_HOSPITAL: "Hospital",
-    CATEGORY_AMBULANCE_STATION: "Ambulance station / Rettungswache",
-    CATEGORY_GENERAL_PRACTITIONER: "General practitioner",
+    CATEGORY_AMBULANCE_STATION: "Rettungswache",
 }
 
 
@@ -50,23 +46,38 @@ async def async_setup_entry(
 ) -> None:
     """Set up FW Locations geolocation entities."""
     coordinator: FwLocCoordinator = entry.runtime_data
-    known_ids: set[str] = set()
+    entities: dict[str, FwLocGeolocationEntity] = {}
 
     @callback
-    def _add_new_entities() -> None:
-        """Add entities that appeared in a coordinator refresh."""
+    def _sync_entities() -> None:
+        """Add new locations and remove locations no longer in the feed."""
         places = coordinator.data or []
-        new_places = [place for place in places if place.unique_id not in known_ids]
+        places_by_id = {place.unique_id: place for place in places}
+        current_ids = set(places_by_id)
+        known_ids = set(entities)
+
+        for stale_id in known_ids - current_ids:
+            stale_entity = entities.pop(stale_id)
+            hass.async_create_task(stale_entity.async_remove(force_remove=True))
+
+        new_places = [
+            places_by_id[place_id]
+            for place_id in current_ids - known_ids
+        ]
         if not new_places:
             return
 
-        known_ids.update(place.unique_id for place in new_places)
-        async_add_entities(
-            [FwLocGeolocationEntity(coordinator, place) for place in new_places]
-        )
+        new_entities = [
+            FwLocGeolocationEntity(coordinator, place)
+            for place in new_places
+        ]
+        for entity in new_entities:
+            entities[entity.place_id] = entity
 
-    _add_new_entities()
-    entry.async_on_unload(coordinator.async_add_listener(_add_new_entities))
+        async_add_entities(new_entities)
+
+    _sync_entities()
+    entry.async_on_unload(coordinator.async_add_listener(_sync_entities))
 
 
 class FwLocGeolocationEntity(
@@ -86,6 +97,11 @@ class FwLocGeolocationEntity(
         self._attr_unique_id = f"{DOMAIN}_{place.unique_id.replace(':', '_')}"
         self._attr_name = place.name
         self._attr_icon = ICONS[place.category]
+
+    @property
+    def place_id(self) -> str:
+        """Return the internal place identifier."""
+        return self._place_id
 
     @property
     def _place(self) -> Place | None:
@@ -149,6 +165,7 @@ class FwLocGeolocationEntity(
 
         for key in (
             "operator",
+            "operator:type",
             "brand",
             "ref",
             "addr:street",
@@ -162,8 +179,6 @@ class FwLocGeolocationEntity(
             "opening_hours",
             "emergency",
             "healthcare",
-            "healthcare:speciality",
-            "healthcare:specialty",
         ):
             if key in tags:
                 attributes[key.replace(":", "_")] = tags[key]
