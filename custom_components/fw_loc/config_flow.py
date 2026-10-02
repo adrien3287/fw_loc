@@ -10,12 +10,10 @@ from homeassistant.core import callback
 from .const import (
     CONF_AMBULANCE_STATIONS,
     CONF_FIRE_STATIONS,
-    CONF_GENERAL_PRACTITIONERS,
     CONF_HOSPITALS,
     CONF_RADIUS_KM,
     DEFAULT_AMBULANCE_STATIONS,
     DEFAULT_FIRE_STATIONS,
-    DEFAULT_GENERAL_PRACTITIONERS,
     DEFAULT_HOSPITALS,
     DEFAULT_RADIUS_KM,
     DOMAIN,
@@ -50,13 +48,6 @@ def _schema(defaults: dict[str, Any]) -> vol.Schema:
                     DEFAULT_AMBULANCE_STATIONS,
                 ),
             ): bool,
-            vol.Required(
-                CONF_GENERAL_PRACTITIONERS,
-                default=defaults.get(
-                    CONF_GENERAL_PRACTITIONERS,
-                    DEFAULT_GENERAL_PRACTITIONERS,
-                ),
-            ): bool,
         }
     )
 
@@ -69,7 +60,6 @@ def _at_least_one_category(data: dict[str, Any]) -> bool:
             CONF_FIRE_STATIONS,
             CONF_HOSPITALS,
             CONF_AMBULANCE_STATIONS,
-            CONF_GENERAL_PRACTITIONERS,
         )
     )
 
