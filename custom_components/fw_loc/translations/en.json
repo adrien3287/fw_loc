@@ -1,0 +1,42 @@
+{
+  "title": "FW Locations",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Nearby emergency and healthcare locations",
+        "description": "Locations are loaded from OpenStreetMap around the Home Assistant home coordinates. The radius is hard-limited to 50 km.",
+        "data": {
+          "radius_km": "Radius (km, max. 50)",
+          "fire_stations": "Fire stations",
+          "hospitals": "Hospitals",
+          "ambulance_stations": "Ambulance stations / Rettungswachen",
+          "general_practitioners": "General practitioners"
+        }
+      }
+    },
+    "error": {
+      "select_one_category": "Enable at least one location category."
+    },
+    "abort": {
+      "single_instance_allowed": "FW Locations is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "FW Locations options",
+        "description": "Change the search radius or enabled categories.",
+        "data": {
+          "radius_km": "Radius (km, max. 50)",
+          "fire_stations": "Fire stations",
+          "hospitals": "Hospitals",
+          "ambulance_stations": "Ambulance stations / Rettungswachen",
+          "general_practitioners": "General practitioners"
+        }
+      }
+    },
+    "error": {
+      "select_one_category": "Enable at least one location category."
+    }
+  }
+}
