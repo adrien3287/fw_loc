@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 import logging
-import re
 from typing import Any
 
 import aiohttp
@@ -20,16 +19,13 @@ from homeassistant.util.location import distance
 from .const import (
     CATEGORY_AMBULANCE_STATION,
     CATEGORY_FIRE_STATION,
-    CATEGORY_GENERAL_PRACTITIONER,
     CATEGORY_HOSPITAL,
     CONF_AMBULANCE_STATIONS,
     CONF_FIRE_STATIONS,
-    CONF_GENERAL_PRACTITIONERS,
     CONF_HOSPITALS,
     CONF_RADIUS_KM,
     DEFAULT_AMBULANCE_STATIONS,
     DEFAULT_FIRE_STATIONS,
-    DEFAULT_GENERAL_PRACTITIONERS,
     DEFAULT_HOSPITALS,
     DEFAULT_RADIUS_KM,
     DOMAIN,
@@ -42,16 +38,31 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-_CACHE_VERSION = 2
-_GENERAL_SPECIALTIES = {
-    "family_medicine",
-    "family_practice",
-    "general",
-    "general_medicine",
-    "general_practice",
-    "general_practitioner",
-    "internal_medicine",
-}
+_CACHE_VERSION = 3
+
+_RETTUNGSWACHE_TERMS = (
+    "rettungswache",
+    "lehrrettungswache",
+    "feuer- und rettungswache",
+    "feuer und rettungswache",
+    "rettungszentrum",
+    "notfallrettung",
+    "rettungsdienst",
+)
+
+_RECOGNIZED_RESCUE_ORGS = (
+    "deutsches rotes kreuz",
+    " drk ",
+    "arbeiter-samariter-bund",
+    "arbeiter samariter bund",
+    " asb ",
+    "johanniter",
+    "malteser",
+    "berufsfeuerwehr",
+    "feuerwehr",
+    "kreisrettungsdienst",
+    "rettungsdienst",
+)
 
 
 @dataclass(slots=True)
@@ -162,12 +173,15 @@ class FwLocCoordinator(DataUpdateCoordinator[list[Place]]):
             _LOGGER.warning(
                 "Using cached FW Locations data because all Overpass endpoints failed"
             )
-            return [
-                place
-                for item in cached["places"]
-                if _is_active_feature((place := Place.from_dict(item)).tags)
-                and bool(self._categories_for(place.tags))
-            ]
+            places: list[Place] = []
+            for item in cached["places"]:
+                place = Place.from_dict(item)
+                if (
+                    _is_active_feature(place.tags)
+                    and place.category in self._categories_for(place.tags)
+                ):
+                    places.append(place)
+            return places
 
         raise UpdateFailed(
             f"Unable to retrieve OpenStreetMap data: {last_error}"
@@ -257,7 +271,7 @@ class FwLocCoordinator(DataUpdateCoordinator[list[Place]]):
         )
 
     def _categories_for(self, tags: dict[str, str]) -> set[str]:
-        """Return all categories represented by an OSM feature."""
+        """Return all categories represented by an active OSM feature."""
         categories: set[str] = set()
 
         if not _is_active_feature(tags):
@@ -275,23 +289,18 @@ class FwLocCoordinator(DataUpdateCoordinator[list[Place]]):
         ):
             categories.add(CATEGORY_HOSPITAL)
 
-        if self._enabled(
-            CONF_AMBULANCE_STATIONS,
-            DEFAULT_AMBULANCE_STATIONS,
-        ) and (
-            tags.get("emergency") == "ambulance_station"
-            or tags.get("amenity") == "ambulance_station"
+        if (
+            self._enabled(
+                CONF_AMBULANCE_STATIONS,
+                DEFAULT_AMBULANCE_STATIONS,
+            )
+            and (
+                tags.get("emergency") == "ambulance_station"
+                or tags.get("amenity") == "ambulance_station"
+            )
+            and _is_rettungswache(tags)
         ):
             categories.add(CATEGORY_AMBULANCE_STATION)
-
-        if self._enabled(
-            CONF_GENERAL_PRACTITIONERS,
-            DEFAULT_GENERAL_PRACTITIONERS,
-        ) and (
-            tags.get("amenity") == "doctors"
-            or tags.get("healthcare") == "doctor"
-        ) and _is_general_practitioner(tags):
-            categories.add(CATEGORY_GENERAL_PRACTITIONER)
 
         return categories
 
@@ -324,17 +333,6 @@ class FwLocCoordinator(DataUpdateCoordinator[list[Place]]):
                 (
                     f'nwr{around}["emergency"="ambulance_station"];',
                     f'nwr{around}["amenity"="ambulance_station"];',
-                )
-            )
-
-        if self._enabled(
-            CONF_GENERAL_PRACTITIONERS,
-            DEFAULT_GENERAL_PRACTITIONERS,
-        ):
-            statements.extend(
-                (
-                    f'nwr{around}["amenity"="doctors"];',
-                    f'nwr{around}["healthcare"="doctor"];',
                 )
             )
 
@@ -379,7 +377,6 @@ def _is_active_feature(tags: dict[str, str]) -> bool:
         "removed",
     }
 
-    # Common simple lifecycle/status markers.
     for key in (
         "abandoned",
         "demolished",
@@ -396,7 +393,6 @@ def _is_active_feature(tags: dict[str, str]) -> bool:
     if tags.get("status", "").strip().lower() in inactive_values:
         return False
 
-    # OSM lifecycle prefixes mean the object is no longer an active amenity.
     lifecycle_prefixes = (
         "abandoned:",
         "demolished:",
@@ -412,28 +408,36 @@ def _is_active_feature(tags: dict[str, str]) -> bool:
     return True
 
 
-def _is_general_practitioner(tags: dict[str, str]) -> bool:
-    """Best-effort filter for general practitioners.
+def _is_rettungswache(tags: dict[str, str]) -> bool:
+    """Keep emergency Rettungswachen, not generic private ambulance businesses."""
+    fields = (
+        tags.get("name", ""),
+        tags.get("official_name", ""),
+        tags.get("operator", ""),
+        tags.get("brand", ""),
+        tags.get("description", ""),
+    )
+    text = " " + " ".join(fields).casefold() + " "
 
-    OSM often leaves healthcare:speciality unset. Unspecified doctor practices
-    are kept because excluding them would remove many ordinary Hausarzt
-    practices. Explicit non-general specialties are excluded.
-    """
-    specialty = (
-        tags.get("healthcare:speciality")
-        or tags.get("healthcare:specialty")
-        or ""
-    ).strip().lower()
-
-    if not specialty:
+    if any(term in text for term in _RETTUNGSWACHE_TERMS):
         return True
 
-    tokens = {
-        token.strip().replace(" ", "_")
-        for token in re.split(r"[;,]", specialty)
-        if token.strip()
-    }
-    return bool(tokens & _GENERAL_SPECIALTIES)
+    if any(term in text for term in _RECOGNIZED_RESCUE_ORGS):
+        return True
+
+    operator_type = tags.get("operator:type", "").strip().casefold()
+    if operator_type in {
+        "government",
+        "public",
+        "community",
+        "religious",
+        "ngo",
+        "nonprofit",
+        "non_profit",
+    }:
+        return True
+
+    return False
 
 
 def _display_name(
@@ -453,7 +457,6 @@ def _display_name(
     fallback = {
         CATEGORY_FIRE_STATION: "Fire station",
         CATEGORY_HOSPITAL: "Hospital",
-        CATEGORY_AMBULANCE_STATION: "Ambulance station",
-        CATEGORY_GENERAL_PRACTITIONER: "General practitioner",
+        CATEGORY_AMBULANCE_STATION: "Rettungswache",
     }[category]
     return f"{fallback} (OSM {osm_id})"
