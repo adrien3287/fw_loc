@@ -35,7 +35,9 @@ from .const import (
     DOMAIN,
     MAX_RADIUS_KM,
     OVERPASS_ENDPOINTS,
+    PROJECT_URL,
     UPDATE_INTERVAL_HOURS,
+    USER_AGENT,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -176,9 +178,15 @@ class FwLocCoordinator(DataUpdateCoordinator[list[Place]]):
     ) -> list[Place]:
         """Fetch and parse one Overpass endpoint."""
         timeout = aiohttp.ClientTimeout(total=75)
+        headers = {
+            "User-Agent": USER_AGENT,
+            "Accept": "application/json",
+            "Referer": PROJECT_URL,
+        }
         async with session.post(
             endpoint,
             data={"data": query},
+            headers=headers,
             timeout=timeout,
         ) as response:
             response.raise_for_status()
